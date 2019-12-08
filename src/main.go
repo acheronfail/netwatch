@@ -46,12 +46,13 @@ func main() {
 
 	// Obtain the mac address of the network card according to the ipv4 address of the network card,
 	// which is used to determine the direction of the data packet later.
-	macAddr, err := findMacAddrByIp(findDeviceIpv4(device))
+	deviceIPv4 := findDeviceIpv4(device)
+	macAddr, err := findMacAddrByIp(deviceIPv4)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Chosen device's IPv4:\t%s\n", findDeviceIpv4(device))
+	fmt.Printf("Chosen device's IPv4:\t%s\n", deviceIPv4)
 	fmt.Printf("Chosen device's MAC:\t%s\n", macAddr)
 
 	// Get the network card handler, can be used to read or write data packets
