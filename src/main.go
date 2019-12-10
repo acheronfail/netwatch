@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
+	"os"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -13,6 +13,9 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+
+	"github.com/acheronfail/netwatch-go/src/socket"
+	"github.com/acheronfail/netwatch-go/src/util"
 )
 
 var (
@@ -28,6 +31,9 @@ var (
 
 func main() {
 	flag.Parse()
+
+	socket.Test()
+	os.Exit(0)
 
 	fmt.Println("simpleUI:", *simpleUI)
 	fmt.Println("deviceName:", *deviceName)
@@ -51,8 +57,8 @@ func main() {
 
 	// Obtain the mac address of the network card according to the ipv4 address of the network card,
 	// which is used to determine the direction of the data packet later.
-	deviceIPv4 := findDeviceIpv4(device)
-	macAddr, err := findMacAddrByIP(deviceIPv4)
+	deviceIPv4 := util.FindDeviceIpv4(device)
+	macAddr, err := util.FindMacAddrByIP(deviceIPv4)
 	if err != nil {
 		panic(err)
 	}
@@ -103,44 +109,6 @@ func main() {
 			}
 		}
 	}
-}
-
-// Get the IPv4 address of the network card
-func findDeviceIpv4(device pcap.Interface) string {
-	for _, addr := range device.Addresses {
-		if ipv4 := addr.IP.To4(); ipv4 != nil {
-			return ipv4.String()
-		}
-	}
-
-	panic("device has no IPv4")
-}
-
-// Obtain the MAC address according to the IPv4 address of the NIC
-// This method is used because gopacket does not encapsulate the method of obtaining the MAC address
-// internally, so look for the MAC address by finding the NIC with the same IPv4 address.
-func findMacAddrByIP(ip string) (string, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		panic(interfaces)
-	}
-
-	for _, i := range interfaces {
-		addrs, err := i.Addrs()
-		if err != nil {
-			panic(err)
-		}
-
-		for _, addr := range addrs {
-			if a, ok := addr.(*net.IPNet); ok {
-				if ip == a.IP.String() {
-					return i.HardwareAddr.String(), nil
-				}
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no device has given ip: %s", ip)
 }
 
 func getNextStats(interval time.Duration) string {
