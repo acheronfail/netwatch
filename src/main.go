@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -23,10 +22,15 @@ var (
 	upStreamDataSize = 0
 	// Name of the network card to be monitored
 	deviceName = flag.String("i", "eth0", "network interface device name")
+	// Whether to use a full text ui
+	simpleUI = flag.Bool("simple-ui", false, "use a simple text ui")
 )
 
 func main() {
 	flag.Parse()
+
+	fmt.Println("simpleUI:", *simpleUI)
+	fmt.Println("deviceName:", *deviceName)
 
 	// Find all devices
 	// Get all NICs
@@ -39,6 +43,7 @@ func main() {
 	// Get the exact NIC from all NICs based on the NIC name
 	var device pcap.Interface
 	for _, d := range devices {
+		fmt.Println(d.Name)
 		if d.Name == *deviceName {
 			device = d
 		}
@@ -47,7 +52,7 @@ func main() {
 	// Obtain the mac address of the network card according to the ipv4 address of the network card,
 	// which is used to determine the direction of the data packet later.
 	deviceIPv4 := findDeviceIpv4(device)
-	macAddr, err := findMacAddrByIp(deviceIPv4)
+	macAddr, err := findMacAddrByIP(deviceIPv4)
 	if err != nil {
 		panic(err)
 	}
@@ -67,7 +72,12 @@ func main() {
 
 	// Start the CLI monitor
 	quitChannel := make(chan struct{})
-	go startCLIMonitor(time.Second/2, quitChannel)
+	updateInterval := time.Second / 2
+	if *simpleUI {
+		go startSimpleMonitor(updateInterval)
+	} else {
+		go startCLIMonitor(updateInterval, quitChannel)
+	}
 
 	// Start capturing packets
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
@@ -109,7 +119,7 @@ func findDeviceIpv4(device pcap.Interface) string {
 // Obtain the MAC address according to the IPv4 address of the NIC
 // This method is used because gopacket does not encapsulate the method of obtaining the MAC address
 // internally, so look for the MAC address by finding the NIC with the same IPv4 address.
-func findMacAddrByIp(ip string) (string, error) {
+func findMacAddrByIP(ip string) (string, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		panic(interfaces)
@@ -130,7 +140,27 @@ func findMacAddrByIp(ip string) (string, error) {
 		}
 	}
 
-	return "", errors.New(fmt.Sprintf("no device has given ip: %s", ip))
+	return "", fmt.Errorf("no device has given ip: %s", ip)
+}
+
+func getNextStats(interval time.Duration) string {
+	normaliser := time.Second / interval
+	down := humanize.Bytes(uint64(downStreamDataSize * int(normaliser)))
+	up := humanize.Bytes(uint64(upStreamDataSize * int(normaliser)))
+
+	// Reset
+	downStreamDataSize = 0
+	upStreamDataSize = 0
+
+	return fmt.Sprintf("Down: %s Up: %s", down, up)
+}
+
+func startSimpleMonitor(interval time.Duration) {
+	for {
+		// TODO: clear whole line
+		fmt.Printf("\r" + getNextStats(interval))
+		time.Sleep(interval)
+	}
 }
 
 // Calculate the average packet size in the second every second, and set the total number of
@@ -141,7 +171,6 @@ func startCLIMonitor(interval time.Duration, quitChannel chan struct{}) {
 	}
 	defer ui.Close()
 
-	normaliser := time.Second / interval
 	uiEvents := ui.PollEvents()
 	ticker := time.NewTicker(interval)
 	for {
@@ -154,18 +183,12 @@ func startCLIMonitor(interval time.Duration, quitChannel chan struct{}) {
 				return
 			}
 		case <-ticker.C:
-			down := humanize.Bytes(uint64(downStreamDataSize * int(normaliser)))
-			up := humanize.Bytes(uint64(upStreamDataSize * int(normaliser)))
 			p := widgets.NewParagraph()
-			p.Text = fmt.Sprintf("\rDown: %s \t Up: %s", down, up)
+			p.Text = getNextStats(interval)
 			p.SetRect(0, 0, 40, 5)
 			p.Border = false
 
 			ui.Render(p)
-
-			// Reset
-			downStreamDataSize = 0
-			upStreamDataSize = 0
 		}
 
 	}
