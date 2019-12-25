@@ -1,0 +1,10 @@
+[package]
+name = "netwatch_cli"
+version = "0.1.0"
+authors = ["acheronfail"]
+edition = "2018"
+
+[dependencies]
+bytesize = "1.0.0"
+pnet = "0.23.0"
+netwatch = { path = "../netwatch"}

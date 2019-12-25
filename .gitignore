@@ -1,0 +1,11 @@
+# Rust build files.
+target/
+
+# Linux kernel module build files.
+pid_inode_map/.tmp_versions
+Module.symvers
+modules.order
+*.mod.c
+*.cmd
+*.ko
+*.o
