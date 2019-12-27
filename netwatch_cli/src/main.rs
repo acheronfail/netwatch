@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use netwatch::packet_monitor::{self, PacketMonitor};
+use netwatch::incoming::IsIncoming;
+use netwatch::packet_monitor::PacketMonitor;
 use netwatch::process::PortToProcessTable;
 use transfer::Transfer;
 
@@ -60,14 +61,14 @@ fn main() {
         use pnet::packet::Packet;
 
         let mut transfer = transfer_for_monitor.lock().unwrap();
-        if packet_monitor::is_incoming(iface, eth) {
+        if eth.is_incoming(iface) {
             transfer.incr_incoming(eth.packet().len() as u64);
         } else {
             transfer.incr_outgoing(eth.packet().len() as u64);
         }
     });
 
-    monitor.set_handler_tcp_packet(|iname, _, tcp| {
+    monitor.set_handler_tcp_packet(|iface, src_dest, tcp| {
         // TODO: `Connection { Process, Transfer }`
         //  new(port): Need a `HashMap<Port, Process>` (TODO: might be shared, so Vec<Process>)
         // TODO: `Vec<Connection>`
@@ -78,12 +79,21 @@ fn main() {
         // TODO: on draw: iter `Vec<Connection>`
         // TODO: clean up `Vec<Connection>` and `HashMap<Port, &Connection>` when socket/descriptors disappear
 
-        println!(
-            "[{}] src: {} dst: {}",
-            iname,
-            tcp.get_source(),
-            tcp.get_destination()
-        );
+        if src_dest.1.is_incoming(iface) {
+            println!(
+                "<-- [{}] src: {} dst: {}",
+                &iface.name,
+                tcp.get_source(),
+                tcp.get_destination()
+            );
+        } else {
+            println!(
+                "--> [{}] src: {} dst: {}",
+                &iface.name,
+                tcp.get_source(),
+                tcp.get_destination()
+            );
+        }
     });
 
     monitor.start();

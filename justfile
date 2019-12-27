@@ -15,13 +15,16 @@ build-rs:
 
 # Linux Kernel Module
 
-build-kernel-module:
-	[ "{{os()}}" == "linux" ] && cd pid_inode_map && make
+is-linux:
+	([ "{{os()}}" == "linux" ] && exit 0) || exit 1
 
-install-kernel-module: build-kernel-module _sudo
+build-kernel-module: is-linux 
+	cd pid_inode_map && make
+
+install-kernel-module: is-linux build-kernel-module _sudo
 	cd pid_inode_map && sudo insmod pid_inode_map.ko
 
-remove-kernel-module: _sudo
+remove-kernel-module: is-linux _sudo
 	sudo rmmod pid_inode_map
 
 # Helpers
