@@ -19,6 +19,7 @@ pub fn is_incoming(interface: &NetworkInterface, ethernet: &EthernetPacket) -> b
   ethernet.get_source() == interface.mac_address()
 }
 
+#[derive(Debug)]
 pub struct SrcDest(IpAddr, IpAddr);
 
 // TODO: document this
@@ -30,6 +31,7 @@ pub struct SrcDest(IpAddr, IpAddr);
 //          handle_udp_packet
 //          handle_icmp_packet
 //          handle_icmpv6_packet
+// TODO: use lifetimes rather than `'static + FnMut`
 pub struct PacketMonitor {
   interface: NetworkInterface,
 

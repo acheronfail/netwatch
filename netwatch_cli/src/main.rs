@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 use netwatch::packet_monitor::{self, PacketMonitor};
-use netwatch::process::ProcessPIDTable;
+use netwatch::process::PortToProcessTable;
 use transfer::Transfer;
 
 /// TODO: the design
@@ -47,7 +47,8 @@ fn main() {
     // TODO: perhaps have a look at https://github.com/lsof-org/lsof/blob/master/main.c
     // `sudo lsof -n -l -i ':50170'`
     // `sudo netstat -np | rg 50982`
-    let _ = ProcessPIDTable::new();
+    let _ = PortToProcessTable::new();
+    // println!("{:#?}", table.inodes);
 
     // ---
 
@@ -65,6 +66,26 @@ fn main() {
             transfer.incr_outgoing(eth.packet().len() as u64);
         }
     });
+
+    monitor.set_handler_tcp_packet(|iname, _, tcp| {
+        // TODO: `Connection { Process, Transfer }`
+        //  new(port): Need a `HashMap<Port, Process>` (TODO: might be shared, so Vec<Process>)
+        // TODO: `Vec<Connection>`
+        // TODO: `Hashmap<Port, &Connection>`
+        // TODO: on packet: packet port -> `HashMap<Port, &Connection>`
+        //  Some(conn) => incr conn.transfer
+        //  None => Connection::new(port)
+        // TODO: on draw: iter `Vec<Connection>`
+        // TODO: clean up `Vec<Connection>` and `HashMap<Port, &Connection>` when socket/descriptors disappear
+
+        println!(
+            "[{}] src: {} dst: {}",
+            iname,
+            tcp.get_source(),
+            tcp.get_destination()
+        );
+    });
+
     monitor.start();
 
     // TODO: potentially move this into Transfer itself? and configure its time interval there?

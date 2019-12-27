@@ -1,4 +1,4 @@
-// TODO: list processes and the sockets they currently own per platform
+use procfs::process::Process;
 
 use std::collections::HashMap;
 
@@ -14,9 +14,18 @@ mod process_inner;
 #[path = "process_windows.rs"]
 mod process_inner;
 
-// TODO: should inodes be u64?
-type InodePIDMap = HashMap<u64, Vec<u64>>;
+type Port = u16;
+type PID = i32;
+type Inode = u32;
+type InodePIDMap = HashMap<Inode, Vec<PID>>;
 
-pub struct ProcessPIDTable {
-  pub inode_pid_map: InodePIDMap,
+#[derive(Debug)]
+pub struct PortToProcessTable {
+  inner: HashMap<Port, Vec<Process>>,
+}
+
+impl PortToProcessTable {
+  pub fn get(&self, port: &Port) -> Option<&Vec<Process>> {
+    self.inner.get(port)
+  }
 }
