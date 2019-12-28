@@ -134,6 +134,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "netwatch"
 version = "0.1.0"
 dependencies = [
+ "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pnet 0.23.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "procfs 0.7.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -142,7 +143,6 @@ dependencies = [
 name = "netwatch_cli"
 version = "0.1.0"
 dependencies = [
- "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "netwatch 0.1.0",
  "pnet 0.23.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

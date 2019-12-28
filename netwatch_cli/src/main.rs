@@ -1,6 +1,5 @@
-mod transfer;
-
 use pnet::datalink::{self, NetworkInterface};
+use pnet::packet::Packet;
 
 use std::env;
 use std::io::{self, Write};
@@ -8,10 +7,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use netwatch::connections::ConnectionTable;
 use netwatch::incoming::IsIncoming;
 use netwatch::packet_monitor::PacketMonitor;
-use netwatch::process::PortToProcessTable;
-use transfer::Transfer;
+use netwatch::port::PortMapper;
+use netwatch::transfer::Transfer;
 
 /// TODO: the design
 ///
@@ -43,73 +43,102 @@ fn main() {
         .unwrap();
 
     // TODO: show all interfaces in UI
+    // TODO: handle terminations/allow quitting/etc
     // ---
 
-    // TODO: perhaps have a look at https://github.com/lsof-org/lsof/blob/master/main.c
-    // `sudo lsof -n -l -i ':50170'`
-    // `sudo netstat -np | rg 50982`
-    let _ = PortToProcessTable::new();
-    // println!("{:#?}", table.inodes);
+    let connections = ConnectionTable::new();
+    let connections = Arc::new(Mutex::new(connections));
 
-    // ---
+    // {
+    //     let mut monitor = PacketMonitor::logger(interface.clone());
+    //     monitor.start();
+    // }
 
-    let transfer = Arc::new(Mutex::new(Transfer::new()));
-
-    let transfer_for_monitor = transfer.clone();
     let mut monitor = PacketMonitor::new(interface);
+
+    // ---
+    // NOTE: handle total incoming and outgoing
+
+    let total_transfer = Arc::new(Mutex::new(Transfer::new()));
+
+    let total_transfer_ethernet = total_transfer.clone();
     monitor.set_handler_ethernet_frame(move |iface, eth| {
-        use pnet::packet::Packet;
-
-        let mut transfer = transfer_for_monitor.lock().unwrap();
+        let mut total_transfer = total_transfer_ethernet.lock().unwrap();
+        let size = eth.packet().len() as u64;
         if eth.is_incoming(iface) {
-            transfer.incr_incoming(eth.packet().len() as u64);
+            println!("<-- {}", size);
+            total_transfer.incr_incoming(size);
         } else {
-            transfer.incr_outgoing(eth.packet().len() as u64);
+            println!("--> {}", size);
+            total_transfer.incr_outgoing(size);
         }
     });
 
-    monitor.set_handler_tcp_packet(|iface, src_dest, tcp| {
-        // TODO: `Connection { Process, Transfer }`
-        //  new(port): Need a `HashMap<Port, Process>` (TODO: might be shared, so Vec<Process>)
-        // TODO: `Vec<Connection>`
-        // TODO: `Hashmap<Port, &Connection>`
-        // TODO: on packet: packet port -> `HashMap<Port, &Connection>`
-        //  Some(conn) => incr conn.transfer
-        //  None => Connection::new(port)
-        // TODO: on draw: iter `Vec<Connection>`
-        // TODO: clean up `Vec<Connection>` and `HashMap<Port, &Connection>` when socket/descriptors disappear
+    // ---
+    // NOTE: handle per-process incoming and outgoing
 
+    let connections_tcp = connections.clone();
+    monitor.set_handler_tcp_packet(move |iface, src_dest, tcp| {
+        let mut connections = connections_tcp.lock().unwrap();
+
+        let port = tcp.get_destination();
+        let size = tcp.packet().len() as u64;
         if src_dest.1.is_incoming(iface) {
-            println!(
-                "<-- [{}] src: {} dst: {}",
-                &iface.name,
-                tcp.get_source(),
-                tcp.get_destination()
-            );
+            connections.incr_incoming(port, size);
         } else {
-            println!(
-                "--> [{}] src: {} dst: {}",
-                &iface.name,
-                tcp.get_source(),
-                tcp.get_destination()
-            );
+            connections.incr_outgoing(port, size);
         }
     });
 
-    monitor.start();
+    let connections_udp = connections.clone();
+    monitor.set_handler_udp_packet(move |iface, src_dest, udp| {
+        let mut connections = connections_udp.lock().unwrap();
 
-    // TODO: potentially move this into Transfer itself? and configure its time interval there?
-    let transfer_for_output = transfer.clone();
-    thread::spawn(move || loop {
-        let mut transfer = transfer_for_output.lock().unwrap();
-
-        println!("\r{}    ", transfer.stats());
-        io::stdout().flush().unwrap();
-        transfer.reset();
-
-        thread::sleep(Duration::from_millis(1000));
+        let port = udp.get_destination();
+        let size = udp.packet().len() as u64;
+        if src_dest.1.is_incoming(iface) {
+            connections.incr_incoming(port, size);
+        } else {
+            connections.incr_outgoing(port, size);
+        }
     });
 
-    // let monitor = PacketMonitor::logger(interface);
-    // monitor.start();
+    // ---
+    // TODO: thread to periodically iterate connection table with port mapper
+    // and print connection information
+
+    println!("Hello");
+    let interval = Duration::from_millis(1_000);
+    let connections_thread = connections.clone();
+    let total_transfer_thread = total_transfer.clone();
+    thread::spawn(move || loop {
+        let (incoming, outgoing) = total_transfer_thread.lock().unwrap().stats();
+        println!("Total transfer: DOWN: {} UP: {}", incoming, outgoing);
+
+        let port_mapper = PortMapper::new();
+        // NOTE: locking the connections here means we can't get packets in our handlers
+        // TODO: is there a way to get read access only to the struct so others can write to it?
+        // TODO: is there a better way?
+        {
+            let connections = connections_thread.lock().unwrap();
+            for (port, transfer) in connections.inner.iter() {
+                let (incoming, outgoing) = transfer.stats();
+                if let Some(processes) = port_mapper.get(&port) {
+                    let process = processes.first().unwrap();
+                    let name = process.cmdline().unwrap().join(" ");
+
+                    println!("DOWN: {} UP: {} PROC: {}", incoming, outgoing, name);
+                } else {
+                    println!("DOWN: {} UP: {} PROC: ???", incoming, outgoing);
+                }
+            }
+        }
+
+        println!();
+        thread::sleep(interval);
+    });
+
+    // ---
+    // NOTE: this currently blocks.
+    monitor.start();
 }

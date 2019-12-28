@@ -1,5 +1,5 @@
 use crate::process::*;
 
-impl PortToProcessTable {
+impl PortMapper {
   // TODO:
 }

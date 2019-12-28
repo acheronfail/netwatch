@@ -26,12 +26,8 @@ impl Transfer {
     self.outgoing = 0;
   }
 
-  pub fn stats(&self) -> String {
+  pub fn stats(&self) -> (ByteSize, ByteSize) {
     // TODO: needs to be calc'd over a time interval
-    format!(
-      "\r download: {}, upload: {}    ",
-      ByteSize(self.incoming),
-      ByteSize(self.outgoing)
-    )
+    (ByteSize(self.incoming), ByteSize(self.outgoing))
   }
 }

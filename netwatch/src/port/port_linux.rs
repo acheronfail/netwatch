@@ -6,16 +6,20 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
 
-use crate::process::*;
+use crate::port::*;
 
-impl PortToProcessTable {
-  pub fn new() -> PortToProcessTable {
-    PortToProcessTable {
+pub type PID = i32;
+pub type Inode = u32;
+pub type InodePIDMap = HashMap<Inode, Vec<PID>>;
+
+impl PortMapper {
+  pub fn new() -> PortMapper {
+    PortMapper {
       inner: HashMap::new(),
     }
   }
 
-  // TODO: how to we clean out old values?
+  // TODO: how should we clean out old values?
   pub fn refresh(&mut self) {
     // Get map of `inode -> port`.
     let inode_port_map = Self::get_inode_to_port();
