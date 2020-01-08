@@ -1,4 +1,4 @@
-use procfs::net::{tcp, tcp6, udp, udp6, TcpState, UdpState};
+use procfs::net::{tcp, tcp6, udp, udp6};
 use procfs::process::{all_processes, FDTarget, Process};
 
 use std::collections::{hash_map::Entry, HashMap};
@@ -31,13 +31,14 @@ impl PortMapper {
     for (inode, port) in inode_port_map {
       if let Some(pids) = inode_pid_map.get(&inode) {
         for pid in pids {
-          let process = Process::new(*pid).unwrap();
-          match self.inner.entry(port) {
-            Entry::Vacant(e) => {
-              e.insert(vec![process]);
-            }
-            Entry::Occupied(mut e) => {
-              e.get_mut().push(process);
+          if let Some(process) = Process::new(*pid).ok() {
+            match self.inner.entry(port) {
+              Entry::Vacant(e) => {
+                e.insert(vec![process]);
+              }
+              Entry::Occupied(mut e) => {
+                e.get_mut().push(process);
+              }
             }
           }
         }
@@ -54,18 +55,18 @@ impl PortMapper {
     let tcp = tcp().unwrap();
     let tcp6 = tcp6().unwrap();
     for entry in tcp.into_iter().chain(tcp6) {
-      if entry.state == TcpState::Listen {
-        inode_port_map.insert(entry.inode, entry.local_address.port());
-      }
+      // if entry.state == TcpState::Established || entry.state == TcpState::Listen {
+      inode_port_map.insert(entry.inode, entry.local_address.port());
+      // }
     }
 
     let udp = udp().unwrap();
     let udp6 = udp6().unwrap();
     for entry in udp.into_iter().chain(udp6) {
       // https://github.com/mattsta/netmatt/issues/1 ?
-      if entry.state == UdpState::Established {
-        inode_port_map.insert(entry.inode, entry.local_address.port());
-      }
+      // if entry.state == UdpState::Established {
+      inode_port_map.insert(entry.inode, entry.local_address.port());
+      // }
     }
 
     inode_port_map

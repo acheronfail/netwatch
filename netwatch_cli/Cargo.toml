@@ -5,5 +5,8 @@ authors = ["acheronfail"]
 edition = "2018"
 
 [dependencies]
-pnet = "0.23.0"
 netwatch = { path = "../netwatch"}
+pnet = "0.23.0"
+
+crossterm = "0.14"
+tui = { version = "0.8", default-features = false, features = ['crossterm'] }

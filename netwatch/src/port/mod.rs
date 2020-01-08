@@ -19,7 +19,8 @@ pub type Port = u16;
 
 #[derive(Debug)]
 pub struct PortMapper {
-  inner: HashMap<Port, Vec<Process>>,
+  // TODO: this shouldn't be public
+  pub inner: HashMap<Port, Vec<Process>>,
 }
 
 impl PortMapper {
