@@ -13,6 +13,7 @@ use pnet::packet::Packet;
 use pnet::util::MacAddr;
 
 use std::net::IpAddr;
+use std::thread;
 
 #[derive(Debug)]
 pub struct SrcDest(pub IpAddr, pub IpAddr);
@@ -158,40 +159,42 @@ impl PacketMonitor {
       Err(e) => panic!("packetdump: unable to create channel: {}", e),
     };
 
-    loop {
-      let mut buf: [u8; 1600] = [0u8; 1600];
-      let mut fake_ethernet_frame = MutableEthernetPacket::new(&mut buf[..]).unwrap();
-      match rx.next() {
-        Ok(packet) => {
-          if cfg!(target_os = "macos")
-            && self.interface.is_up()
-            && !self.interface.is_broadcast()
-            && !self.interface.is_loopback()
-            && self.interface.is_point_to_point()
-          {
-            // Maybe is TUN interface
-            let version = Ipv4Packet::new(&packet).unwrap().get_version();
-            if version == 4 {
-              fake_ethernet_frame.set_destination(MacAddr(0, 0, 0, 0, 0, 0));
-              fake_ethernet_frame.set_source(MacAddr(0, 0, 0, 0, 0, 0));
-              fake_ethernet_frame.set_ethertype(EtherTypes::Ipv4);
-              fake_ethernet_frame.set_payload(&packet);
-              self.handle_ethernet_frame(&fake_ethernet_frame.to_immutable());
-              continue;
-            } else if version == 6 {
-              fake_ethernet_frame.set_destination(MacAddr(0, 0, 0, 0, 0, 0));
-              fake_ethernet_frame.set_source(MacAddr(0, 0, 0, 0, 0, 0));
-              fake_ethernet_frame.set_ethertype(EtherTypes::Ipv6);
-              fake_ethernet_frame.set_payload(&packet);
-              self.handle_ethernet_frame(&fake_ethernet_frame.to_immutable());
-              continue;
+    thread::spawn(move || {
+      loop {
+        let mut buf: [u8; 1600] = [0u8; 1600];
+        let mut fake_ethernet_frame = MutableEthernetPacket::new(&mut buf[..]).unwrap();
+        match rx.next() {
+          Ok(packet) => {
+            if cfg!(target_os = "macos")
+              && self.interface.is_up()
+              && !self.interface.is_broadcast()
+              && !self.interface.is_loopback()
+              && self.interface.is_point_to_point()
+            {
+              // Maybe is TUN interface
+              let version = Ipv4Packet::new(&packet).unwrap().get_version();
+              if version == 4 {
+                fake_ethernet_frame.set_destination(MacAddr(0, 0, 0, 0, 0, 0));
+                fake_ethernet_frame.set_source(MacAddr(0, 0, 0, 0, 0, 0));
+                fake_ethernet_frame.set_ethertype(EtherTypes::Ipv4);
+                fake_ethernet_frame.set_payload(&packet);
+                self.handle_ethernet_frame(&fake_ethernet_frame.to_immutable());
+                continue;
+              } else if version == 6 {
+                fake_ethernet_frame.set_destination(MacAddr(0, 0, 0, 0, 0, 0));
+                fake_ethernet_frame.set_source(MacAddr(0, 0, 0, 0, 0, 0));
+                fake_ethernet_frame.set_ethertype(EtherTypes::Ipv6);
+                fake_ethernet_frame.set_payload(&packet);
+                self.handle_ethernet_frame(&fake_ethernet_frame.to_immutable());
+                continue;
+              }
             }
+            self.handle_ethernet_frame(&EthernetPacket::new(packet).unwrap());
           }
-          self.handle_ethernet_frame(&EthernetPacket::new(packet).unwrap());
+          Err(e) => panic!("packetdump: unable to receive packet: {}", e),
         }
-        Err(e) => panic!("packetdump: unable to receive packet: {}", e),
       }
-    }
+    });
   }
 
   // ----------------------

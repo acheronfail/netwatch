@@ -3,6 +3,8 @@ use bytesize::ByteSize;
 use std::fmt::{Display, Formatter, Error};
 use std::result::Result;
 
+pub const DEFAULT_INTERVAL_MILLIS: u64 = 1_000;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Transfer {
   incoming: u64,
@@ -30,9 +32,12 @@ impl Transfer {
     self.outgoing = 0;
   }
 
-  pub fn stats(&self) -> (ByteSize, ByteSize) {
-    // TODO: needs to be calc'd over a time interval
-    (ByteSize(self.incoming), ByteSize(self.outgoing))
+  pub fn stats(&self, millis: u64) -> (ByteSize, ByteSize) {
+    let normaliser = 1_000 / millis;
+    let incoming = ByteSize(self.incoming * normaliser);
+    let outgoing = ByteSize(self.outgoing * normaliser);
+
+    (incoming, outgoing)
   }
 
   pub fn merge(&mut self, other: &Transfer) {
@@ -43,7 +48,7 @@ impl Transfer {
 
 impl Display for Transfer {
   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-    let (incoming, outgoing) = self.stats();
+    let (incoming, outgoing) = self.stats(DEFAULT_INTERVAL_MILLIS);
     let incoming = format!("{}", incoming);
     let outgoing = format!("{}", outgoing);
     f.pad(&format!("{:>8} {:>8}", incoming, outgoing))
